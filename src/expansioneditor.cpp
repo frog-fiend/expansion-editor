@@ -52,12 +52,12 @@ T getInput()
    return val;
 }
 
-/// @brief  Prompts user and activates selected pack 
+/// @brief  Prompts user and activates selected pack
 /// @param  activePacks   Currently active packs
 /// @param  inactivePacks Currently inactive packs
 void activatePack(std::vector<std::string> &activePacks, std::vector<std::string> &inactivePacks)
 {
-      // Edge case
+   // Edge case
    if (inactivePacks.empty())
    {
       std::cout << "No inactive packs.\n\n";
@@ -191,7 +191,7 @@ void activatePack(std::vector<std::string> &activePacks, std::vector<std::string
    inactivePacks.erase(inactivePacks.begin() + packIndex);
 }
 
-/// @brief  Prompts user and deactivates selected pack 
+/// @brief  Prompts user and deactivates selected pack
 /// @param  activePacks   Currently active packs
 /// @param  inactivePacks Currently inactive packs
 void deactivatePack(std::vector<std::string> &activePacks, std::vector<std::string> &inactivePacks)
@@ -330,7 +330,7 @@ void deactivatePack(std::vector<std::string> &activePacks, std::vector<std::stri
    activePacks.erase(activePacks.begin() + packIndex);
 }
 
-/// @brief  Prompts user and activates selected pack 
+/// @brief  Prompts user and activates selected pack
 /// @param  activePacks   Currently active packs
 /// @param  inactivePacks Currently inactive packs
 void showStatus(std::vector<std::string> &activePacks, std::vector<std::string> &inactivePacks)
@@ -348,7 +348,7 @@ void showStatus(std::vector<std::string> &activePacks, std::vector<std::string> 
    }
 }
 
-/// @brief  Loads pack from key register 
+/// @brief  Loads pack from key register
 /// @param  activePacks   Vector to store active packs
 /// @param  inactivePacks Vector to store inactive packs
 void loadPacks(std::vector<std::string> &activePacks, std::vector<std::string> &inactivePacks)
@@ -426,6 +426,57 @@ void loadPacks(std::vector<std::string> &activePacks, std::vector<std::string> &
    RegCloseKey(deactiveHkey);
 }
 
+/// @brief  Ensures that a backup registry key exists
+void assertBackupKey()
+{
+   // Prep storage
+   HKEY otherBackupKey;
+   HKEY eaBackupKey;
+   LONG result;
+   DWORD creationStatus;
+
+   // Fetch parent key access
+   result = RegOpenKeyExA(HKEYROOT, backupPaths[0].c_str(), 0, KEY_QUERY_VALUE | KEY_ENUMERATE_SUB_KEYS, &otherBackupKey);
+   result = result == ERROR_SUCCESS ? RegOpenKeyExA(HKEYROOT, backupPaths[1].c_str(), 0, KEY_QUERY_VALUE | KEY_ENUMERATE_SUB_KEYS, &eaBackupKey) : result;
+   if (result != ERROR_SUCCESS)
+   {
+      if (result == ERROR_FILE_NOT_FOUND)
+      {
+         // Ask for permission to create backup registry key
+         std::cout << "No backup data found. Create new backup key?: [y/n] " << result << std::endl;
+         char input = 'x';
+         while (input != 'y' && input != 'n')
+         {
+            input = getInput<char>();
+         }
+
+         if (input == 'y')
+         {
+            
+            result = RegCreateKeyExA(HKEYROOT, (backupPaths[0]).c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &otherBackupKey, &creationStatus);
+            result = result == ERROR_SUCCESS ? RegCreateKeyExA(HKEYROOT, (backupPaths[1]).c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &eaBackupKey, &creationStatus) : result;
+         }
+         else
+         {
+            std::cout << "Error creating key: " << result << std::endl;
+            RegCloseKey(otherBackupKey);
+            RegCloseKey(eaBackupKey);
+            exit(1);
+         }
+      }
+      else
+      {
+         std::cout << "Error opening key: " << result << std::endl;
+         RegCloseKey(otherBackupKey);
+         RegCloseKey(eaBackupKey);
+         exit(1);
+      }
+   }
+
+   RegCloseKey(otherBackupKey);
+   RegCloseKey(eaBackupKey);
+}
+
 int main(int argc, char *argv[])
 {
    // Init
@@ -433,6 +484,7 @@ int main(int argc, char *argv[])
    char input = NOTDEF;
    std::vector<std::string> activePacks;
    std::vector<std::string> inactivePacks;
+   assertBackupKey();
    loadPacks(activePacks, inactivePacks);
 
    // Menu loop

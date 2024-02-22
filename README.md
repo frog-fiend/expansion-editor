@@ -14,8 +14,7 @@ HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Electronic Arts\Sims(Steam)
 ```
 By right clicking on each key and choosing *Export*, you can then save a file of each key and its subkeys to be able to later restore the values. To restore, click *File*, choose *Import...* and choose your regkey file. 
 
-When running the binary, follow the menu instructions to activate and deactivate packs, and to show which packs are currently active or inactive. Any save file using those expansions will not be loadable as long as those packs are disabled.
+When first running the binary, it will try to find an existing backup registry key and, if none is found, prompt you about creating a new one. When a backup registry key has been created, follow the menu instructions to activate and deactivate packs, and to show which packs are currently active or inactive. Any save file using those expansions will not be loadable as long as those packs are disabled. 
 
 ## Known problems
-* CURRENTLY NOT FUNCTINAL: NEED TO ADD CREATION AND CHECKING AFTER SIMS.BK KEY
 * This version currently does not work with the "High-End Loft Stuff" stuff pack. 
