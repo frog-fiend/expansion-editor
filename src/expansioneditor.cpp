@@ -20,6 +20,12 @@ enum Options
 const std::vector<std::string> realPaths = {"SOFTWARE\\WOW6432Node\\Sims(Steam)", "SOFTWARE\\WOW6432Node\\Electronic Arts\\Sims(Steam)"};
 const std::vector<std::string> backupPaths = {"SOFTWARE\\WOW6432Node\\Sims.BK", "SOFTWARE\\WOW6432Node\\Electronic Arts\\Sims.BK"};
 
+// Expansion pack info
+typedef struct {
+   std::string otherPathName;
+   std::string eaPathName;
+} ExpansionPack;
+
 /// @brief Displays menu
 void displayMenu()
 {
@@ -55,7 +61,7 @@ T getInput()
 /// @brief  Prompts user and activates selected pack
 /// @param  activePacks   Currently active packs
 /// @param  inactivePacks Currently inactive packs
-void activatePack(std::vector<std::string> &activePacks, std::vector<std::string> &inactivePacks)
+void activatePack(std::vector<ExpansionPack> &activePacks, std::vector<ExpansionPack> &inactivePacks)
 {
    // Edge case
    if (inactivePacks.empty())
@@ -64,11 +70,14 @@ void activatePack(std::vector<std::string> &activePacks, std::vector<std::string
       return;
    }
 
+   // For handling exit
+   std::vector<HKEY> openedKeys;
+
    // Get user choice
    std::cout << "\n";
    for (int i = 1; i <= inactivePacks.size(); i++)
    {
-      std::cout << i << ": " << inactivePacks[i - 1] << "\n";
+      std::cout << i << ": " << inactivePacks[i - 1].eaPathName << "\n";
    }
 
    std::cout << "\n==== Pick pack by list index ====\n";
@@ -88,113 +97,99 @@ void activatePack(std::vector<std::string> &activePacks, std::vector<std::string
    if (result != ERROR_SUCCESS)
    {
       std::cout << "Error opening key otherBackupKey: " << result << std::endl;
-      exit(1);
+      goto exit;
    }
+   openedKeys.push_back(otherBackupKey);
+
    result = RegOpenKeyExA(HKEYROOT, (backupPaths[1]).c_str(), 0, KEY_ALL_ACCESS, &eaBackupKey);
    if (result != ERROR_SUCCESS)
    {
       std::cout << "Error opening key eaBackupKey: " << result << std::endl;
-      RegCloseKey(otherBackupKey);
-      exit(1);
+      goto exit;
    }
+   openedKeys.push_back(eaBackupKey);
 
    HKEY otherRealKey;
    HKEY eaRealKey;
    DWORD creationStatus;
-   result = RegCreateKeyExA(HKEYROOT, (realPaths[0] + "\\" + inactivePacks[packIndex]).c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &otherRealKey, &creationStatus);
+   result = RegCreateKeyExA(HKEYROOT, (realPaths[0] + "\\" + inactivePacks[packIndex].otherPathName).c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &otherRealKey, &creationStatus);
    if (result != ERROR_SUCCESS)
    {
       std::cout << "Error creating key: " << result << std::endl;
-      RegCloseKey(otherBackupKey);
-      RegCloseKey(eaBackupKey);
-      exit(1);
+      goto exit;
    }
    if (creationStatus != REG_CREATED_NEW_KEY)
    {
       std::cout << "Error creating key: " << creationStatus << std::endl;
-      RegCloseKey(otherBackupKey);
-      RegCloseKey(eaBackupKey);
-      RegCloseKey(otherRealKey);
-      exit(1);
+      goto exit;
    }
-   result = RegCreateKeyExA(HKEYROOT, (realPaths[1] + "\\" + inactivePacks[packIndex]).c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &eaRealKey, &creationStatus);
+   openedKeys.push_back(otherRealKey);
+
+   result = RegCreateKeyExA(HKEYROOT, (realPaths[1] + "\\" + inactivePacks[packIndex].eaPathName).c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &eaRealKey, &creationStatus);
    if (result != ERROR_SUCCESS)
    {
       std::cout << "Error creating key: " << result << std::endl;
-      RegCloseKey(otherBackupKey);
-      RegCloseKey(eaBackupKey);
-      RegCloseKey(otherRealKey);
-      exit(1);
+      goto exit;
    }
    if (creationStatus != REG_CREATED_NEW_KEY)
    {
       std::cout << "Error creating key: " << creationStatus << std::endl;
-      RegCloseKey(otherBackupKey);
-      RegCloseKey(eaBackupKey);
-      RegCloseKey(otherRealKey);
-      RegCloseKey(eaRealKey);
-      exit(1);
+      goto exit;
    }
+   openedKeys.push_back(eaRealKey);
 
    // Copy to real keys
-   result = RegCopyTreeA(otherBackupKey, inactivePacks[packIndex].c_str(), otherRealKey);
+   result = RegCopyTreeA(otherBackupKey, inactivePacks[packIndex].otherPathName.c_str(), otherRealKey);
    if (result != ERROR_SUCCESS)
    {
       std::cout << "Error copying key: " << result << std::endl;
-      RegCloseKey(otherBackupKey);
-      RegCloseKey(eaBackupKey);
-      RegCloseKey(otherRealKey);
-      RegCloseKey(eaRealKey);
-      exit(1);
+      goto exit;
    }
-   result = RegCopyTreeA(eaBackupKey, inactivePacks[packIndex].c_str(), eaRealKey);
+   result = RegCopyTreeA(eaBackupKey, inactivePacks[packIndex].eaPathName.c_str(), eaRealKey);
    if (result != ERROR_SUCCESS)
    {
       std::cout << "Error copying key: " << result << std::endl;
-      RegCloseKey(otherBackupKey);
-      RegCloseKey(eaBackupKey);
-      RegCloseKey(otherRealKey);
-      RegCloseKey(eaRealKey);
-      exit(1);
+      goto exit;
    }
 
    // Delete inactive keys
-   result = RegDeleteKeyExA(otherBackupKey, inactivePacks[packIndex].c_str(), KEY_WOW64_32KEY, 0);
+   result = RegDeleteKeyExA(otherBackupKey, inactivePacks[packIndex].otherPathName.c_str(), KEY_WOW64_32KEY, 0);
    if (result != ERROR_SUCCESS)
    {
       std::cout << "Error deleting key otherBackupKey: " << result << std::endl;
-      RegCloseKey(otherBackupKey);
-      RegCloseKey(eaBackupKey);
-      RegCloseKey(otherRealKey);
-      RegCloseKey(eaRealKey);
-      exit(1);
+      goto exit;
    }
-   result = RegDeleteTreeA(eaBackupKey, inactivePacks[packIndex].c_str());
+   result = RegDeleteTreeA(eaBackupKey, inactivePacks[packIndex].eaPathName.c_str());
    if (result != ERROR_SUCCESS)
    {
       std::cout << "Error deleting key eaBackupKey: " << result << std::endl;
-      RegCloseKey(otherBackupKey);
-      RegCloseKey(eaBackupKey);
-      RegCloseKey(otherRealKey);
-      RegCloseKey(eaRealKey);
-      exit(1);
+      goto exit;
    }
-
-   // Close HKEYs
-   RegCloseKey(otherBackupKey);
-   RegCloseKey(eaBackupKey);
-   RegCloseKey(otherRealKey);
-   RegCloseKey(eaRealKey);
 
    // Move pack to active list
    activePacks.push_back(inactivePacks[packIndex]);
    inactivePacks.erase(inactivePacks.begin() + packIndex);
+
+exit:
+   // Close HKEYs
+   for(HKEY hKey : openedKeys)
+   {
+      RegCloseKey(hKey);
+   }
+
+   // If we have gotten here with an error; fatal error has occured
+   if(result != ERROR_SUCCESS)
+   {
+      std::cout << "Fatal error occured." << std::endl;
+      exit(1);
+   }
+
 }
 
 /// @brief  Prompts user and deactivates selected pack
 /// @param  activePacks   Currently active packs
 /// @param  inactivePacks Currently inactive packs
-void deactivatePack(std::vector<std::string> &activePacks, std::vector<std::string> &inactivePacks)
+void deactivatePack(std::vector<ExpansionPack> &activePacks, std::vector<ExpansionPack> &inactivePacks)
 {
    // Edge case
    if (activePacks.empty())
@@ -203,11 +198,14 @@ void deactivatePack(std::vector<std::string> &activePacks, std::vector<std::stri
       return;
    }
 
+   // For handling exit
+   std::vector<HKEY> openedKeys;
+
    // Get user choice
    std::cout << "\n";
    for (int i = 1; i <= activePacks.size(); i++)
    {
-      std::cout << i << ": " << activePacks[i - 1] << "\n";
+      std::cout << i << ": " << activePacks[i - 1].eaPathName << "\n";
    }
 
    std::cout << "\n==== Pick pack by list index ====\n";
@@ -227,159 +225,170 @@ void deactivatePack(std::vector<std::string> &activePacks, std::vector<std::stri
    if (result != ERROR_SUCCESS)
    {
       std::cout << "Error opening key otherRealKey: " << result << std::endl;
-      exit(1);
+      goto exit;
    }
+   openedKeys.push_back(otherRealKey);
+
    result = RegOpenKeyExA(HKEYROOT, (realPaths[1]).c_str(), 0, KEY_ALL_ACCESS, &eaRealKey);
    if (result != ERROR_SUCCESS)
    {
       std::cout << "Error opening key eaRealKey: " << result << std::endl;
-      RegCloseKey(otherRealKey);
-      exit(1);
+      goto exit;
    }
+   openedKeys.push_back(eaRealKey);
 
    HKEY otherBackupKey;
    HKEY eaBackupKey;
    DWORD creationStatus;
-   result = RegCreateKeyExA(HKEYROOT, (backupPaths[0] + "\\" + activePacks[packIndex]).c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &otherBackupKey, &creationStatus);
+   result = RegCreateKeyExA(HKEYROOT, (backupPaths[0] + "\\" + activePacks[packIndex].otherPathName).c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &otherBackupKey, &creationStatus);
    if (result != ERROR_SUCCESS)
    {
       std::cout << "Error creating key: " << result << std::endl;
-      RegCloseKey(otherRealKey);
-      RegCloseKey(eaRealKey);
-      exit(1);
+      goto exit;
    }
    if (creationStatus != REG_CREATED_NEW_KEY)
    {
       std::cout << "Error creating key: " << creationStatus << std::endl;
-      RegCloseKey(otherRealKey);
-      RegCloseKey(eaRealKey);
-      RegCloseKey(otherBackupKey);
-      exit(1);
+      goto exit;
    }
-   result = RegCreateKeyExA(HKEYROOT, (backupPaths[1] + "\\" + activePacks[packIndex]).c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &eaBackupKey, &creationStatus);
+   openedKeys.push_back(otherBackupKey);
+
+   result = RegCreateKeyExA(HKEYROOT, (backupPaths[1] + "\\" + activePacks[packIndex].eaPathName).c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &eaBackupKey, &creationStatus);
    if (result != ERROR_SUCCESS)
    {
       std::cout << "Error creating key: " << result << std::endl;
-      RegCloseKey(otherRealKey);
-      RegCloseKey(eaRealKey);
-      RegCloseKey(otherBackupKey);
-      exit(1);
+      goto exit;
    }
    if (creationStatus != REG_CREATED_NEW_KEY)
    {
       std::cout << "Error creating key: " << creationStatus << std::endl;
-      RegCloseKey(otherRealKey);
-      RegCloseKey(eaRealKey);
-      RegCloseKey(otherBackupKey);
-      RegCloseKey(eaBackupKey);
-      exit(1);
+      goto exit;
    }
+   openedKeys.push_back(eaBackupKey);
+
 
    // Copy to backup keys
-   result = RegCopyTreeA(otherRealKey, activePacks[packIndex].c_str(), otherBackupKey);
+   result = RegCopyTreeA(otherRealKey, activePacks[packIndex].otherPathName.c_str(), otherBackupKey);
    if (result != ERROR_SUCCESS)
    {
       std::cout << "Error copying key: " << result << std::endl;
-      RegCloseKey(otherRealKey);
-      RegCloseKey(eaRealKey);
-      RegCloseKey(otherBackupKey);
-      RegCloseKey(eaBackupKey);
-      exit(1);
+      goto exit;
    }
-   result = RegCopyTreeA(eaRealKey, activePacks[packIndex].c_str(), eaBackupKey);
+   result = RegCopyTreeA(eaRealKey, activePacks[packIndex].eaPathName.c_str(), eaBackupKey);
    if (result != ERROR_SUCCESS)
    {
       std::cout << "Error copying key: " << result << std::endl;
-      RegCloseKey(otherRealKey);
-      RegCloseKey(eaRealKey);
-      RegCloseKey(otherBackupKey);
-      RegCloseKey(eaBackupKey);
-      exit(1);
+      goto exit;
    }
 
    // Delete active keys
-   result = RegDeleteKeyExA(otherRealKey, activePacks[packIndex].c_str(), KEY_WOW64_32KEY, 0);
+   result = RegDeleteKeyExA(otherRealKey, activePacks[packIndex].otherPathName.c_str(), KEY_WOW64_32KEY, 0);
    if (result != ERROR_SUCCESS)
    {
       std::cout << "Error deleting key otherRealKey: " << result << std::endl;
-      RegCloseKey(otherRealKey);
-      RegCloseKey(eaRealKey);
-      RegCloseKey(otherBackupKey);
-      RegCloseKey(eaBackupKey);
-      exit(1);
+      goto exit;
    }
-   result = RegDeleteTreeA(eaRealKey, activePacks[packIndex].c_str());
+   result = RegDeleteTreeA(eaRealKey, activePacks[packIndex].eaPathName.c_str());
    if (result != ERROR_SUCCESS)
    {
       std::cout << "Error deleting key eaRealKey: " << result << std::endl;
-      RegCloseKey(otherRealKey);
-      RegCloseKey(eaRealKey);
-      RegCloseKey(otherBackupKey);
-      RegCloseKey(eaBackupKey);
-      exit(1);
+      goto exit;
    }
-
-   // Close HKEYs
-   RegCloseKey(otherRealKey);
-   RegCloseKey(eaRealKey);
-   RegCloseKey(otherBackupKey);
-   RegCloseKey(eaBackupKey);
 
    // Move pack to inactive list
    inactivePacks.push_back(activePacks[packIndex]);
    activePacks.erase(activePacks.begin() + packIndex);
+
+exit:
+   // Close HKEYs
+   for(HKEY hKey : openedKeys)
+   {
+      RegCloseKey(hKey);
+   }
+
+   // If we have gotten here with an error; fatal error has occured
+   if(result != ERROR_SUCCESS)
+   {
+      std::cout << "Fatal error occured." << std::endl;
+      exit(1);
+   }
 }
 
 /// @brief  Prompts user and activates selected pack
 /// @param  activePacks   Currently active packs
 /// @param  inactivePacks Currently inactive packs
-void showStatus(std::vector<std::string> &activePacks, std::vector<std::string> &inactivePacks)
+void showStatus(std::vector<ExpansionPack> &activePacks, std::vector<ExpansionPack> &inactivePacks)
 {
    std::cout << "==== ACTIVE PACKS ====\n";
    for (int i = 1; i <= activePacks.size(); i++)
    {
-      std::cout << i << ": " << activePacks[i - 1] << "\n";
+      std::cout << i << ": " << activePacks[i - 1].eaPathName << "\n";
    }
    std::cout << "\n";
    std::cout << "==== DEACTIVATED PACKS ====\n";
    for (int i = 1; i <= inactivePacks.size(); i++)
    {
-      std::cout << i << ": " << inactivePacks[i - 1] << "\n";
+      std::cout << i << ": " << inactivePacks[i - 1].eaPathName << "\n";
    }
 }
 
-/// @brief  Loads pack from key register
+/// @brief  Loads packs from key register
 /// @param  activePacks   Vector to store active packs
 /// @param  inactivePacks Vector to store inactive packs
-void loadPacks(std::vector<std::string> &activePacks, std::vector<std::string> &inactivePacks)
+void loadPacks(std::vector<ExpansionPack> &activePacks, std::vector<ExpansionPack> &inactivePacks)
 {
-   // Prep storage
-   HKEY activeHkey;
-   HKEY deactiveHkey;
+   // Init variables
+   HKEY activeOtherHkey;
+   HKEY activeEaHkey;
+   HKEY deactiveOtherHkey;
+   HKEY deactiveEaHkey;
    LONG result;
+   std::vector<HKEY> openedKeys; // Simplifies closing and error handling
 
-   // Fetch parent key access
-   result = RegOpenKeyExA(HKEYROOT, realPaths[0].c_str(), 0, KEY_QUERY_VALUE | KEY_ENUMERATE_SUB_KEYS, &activeHkey);
-   if (result != ERROR_SUCCESS)
-   {
-      std::cout << "Error opening key: " << result << std::endl;
-      exit(1);
-   }
-   result = RegOpenKeyExA(HKEYROOT, backupPaths[0].c_str(), 0, KEY_QUERY_VALUE | KEY_ENUMERATE_SUB_KEYS, &deactiveHkey);
-   if (result != ERROR_SUCCESS)
-   {
-      std::cout << "Error opening key: " << result << std::endl;
-      RegCloseKey(activeHkey);
-      exit(1);
-   }
-
-   // Find all subkeys/packs
    int subkeyIndex = 0;
    DWORD bufferSize = 255;
-   char buffer[bufferSize];
+   char bufferOther[bufferSize];
+   char bufferEa[bufferSize];
+
+   // Fetch parent key access
+   result = RegOpenKeyExA(HKEYROOT, realPaths[0].c_str(), 0, KEY_QUERY_VALUE | KEY_ENUMERATE_SUB_KEYS, &activeOtherHkey);
+   if (result != ERROR_SUCCESS)
+   {
+      std::cout << "Error opening key: " << result << std::endl;
+      goto exit;
+   }
+   openedKeys.push_back(activeOtherHkey);
+
+   result = RegOpenKeyExA(HKEYROOT, realPaths[1].c_str(), 0, KEY_QUERY_VALUE | KEY_ENUMERATE_SUB_KEYS, &activeEaHkey);
+   if (result != ERROR_SUCCESS)
+   {
+      std::cout << "Error opening key: " << result << std::endl;
+      goto exit;
+   }
+   openedKeys.push_back(activeEaHkey);
+
+   result = RegOpenKeyExA(HKEYROOT, backupPaths[0].c_str(), 0, KEY_QUERY_VALUE | KEY_ENUMERATE_SUB_KEYS, &deactiveOtherHkey);
+   if (result != ERROR_SUCCESS)
+   {
+      std::cout << "Error opening key: " << result << std::endl;
+      goto exit;
+   }
+   openedKeys.push_back(deactiveOtherHkey);
+
+   result = RegOpenKeyExA(HKEYROOT, backupPaths[1].c_str(), 0, KEY_QUERY_VALUE | KEY_ENUMERATE_SUB_KEYS, &deactiveEaHkey);
+   if (result != ERROR_SUCCESS)
+   {
+      std::cout << "Error opening key: " << result << std::endl;
+      goto exit;
+   }
+   openedKeys.push_back(deactiveEaHkey);
+
+   // Find all subkeys/packs
    while (true)
    {
-      result = RegEnumKeyExA(activeHkey, subkeyIndex, buffer, &bufferSize, NULL, NULL, NULL, NULL);
+      result = RegEnumKeyExA(activeOtherHkey, subkeyIndex, bufferOther, &bufferSize, NULL, NULL, NULL, NULL);
+      bufferSize = 255; // Need to reset as RegEnumKeyExA changes bufferSize
+      result = result == ERROR_SUCCESS ? RegEnumKeyExA(activeEaHkey, subkeyIndex, bufferEa, &bufferSize, NULL, NULL, NULL, NULL) : result;
       if (result != ERROR_SUCCESS)
       {
          if (result == ERROR_NO_MORE_ITEMS)
@@ -388,20 +397,23 @@ void loadPacks(std::vector<std::string> &activePacks, std::vector<std::string> &
          }
          else
          {
-            std::cout << "Error reading subkeys: " << result << std::endl;
-            RegCloseKey(activeHkey);
-            RegCloseKey(deactiveHkey);
-            exit(1);
+            goto exit;
          }
       }
-      activePacks.push_back(buffer);
+
+      // Add both reg key names of pack
+      ExpansionPack pack = { bufferOther, bufferEa };
+      activePacks.push_back(pack);
       bufferSize = 255;
       subkeyIndex++;
    }
+
    subkeyIndex = 0;
    while (true)
    {
-      result = RegEnumKeyExA(deactiveHkey, subkeyIndex, buffer, &bufferSize, NULL, NULL, NULL, NULL);
+      result = RegEnumKeyExA(deactiveOtherHkey, subkeyIndex, bufferOther, &bufferSize, NULL, NULL, NULL, NULL);
+      bufferSize = 255;
+      result = result == ERROR_SUCCESS ? RegEnumKeyExA(deactiveEaHkey, subkeyIndex, bufferEa, &bufferSize, NULL, NULL, NULL, NULL) : result;
       if (result != ERROR_SUCCESS)
       {
          if (result == ERROR_NO_MORE_ITEMS)
@@ -411,19 +423,30 @@ void loadPacks(std::vector<std::string> &activePacks, std::vector<std::string> &
          else
          {
             std::cout << "Error reading subkeys: " << result << std::endl;
-            RegCloseKey(activeHkey);
-            RegCloseKey(deactiveHkey);
-            exit(1);
+            goto exit;
          }
       }
+
+      // Add both reg key names of pack
+      ExpansionPack pack = { bufferOther, bufferEa };
+      inactivePacks.push_back(pack);
       bufferSize = 255;
-      inactivePacks.push_back(buffer);
       subkeyIndex++;
    }
 
+exit:
    // Close HKeys
-   RegCloseKey(activeHkey);
-   RegCloseKey(deactiveHkey);
+   for(HKEY hKey : openedKeys)
+   {
+      RegCloseKey(hKey);
+   }
+
+   // If we have gotten here with an error; fatal error has occured
+   if(result != ERROR_NO_MORE_ITEMS)
+   {
+      std::cout << "Fatal error occured." << std::endl;
+      exit(1);
+   }
 }
 
 /// @brief  Ensures that a backup registry key exists
@@ -482,8 +505,8 @@ int main(int argc, char *argv[])
    // Init
    bool quit = false;
    char input = NOTDEF;
-   std::vector<std::string> activePacks;
-   std::vector<std::string> inactivePacks;
+   std::vector<ExpansionPack> activePacks;
+   std::vector<ExpansionPack> inactivePacks;
    assertBackupKey();
    loadPacks(activePacks, inactivePacks);
 
