@@ -5,7 +5,7 @@ Expansion editor makes it possible to deactivate and reactivate expansion/stuff 
 This version only works for the Steam version of the Sims 3, but could be easily edited to work for other versions aswell by editing the paths to the registry keys. 
 
 ## Usage
-Build the binary by compiling `src/ExpansionEditor.cpp` with a compiler of your choice. I recommend downloading MinGW, as you are going to want to build an executable suitable for Windows, as well as have access to the `<Windows.h>` headers. You will need to run the binary **as administrator** to be to activate or deactivate packs, as you need to be able to create/copy/delete registry keys. 
+Build the binary by compiling `src/expansioneditor.cpp` with a compiler of your choice. I recommend downloading MinGW, as you are going to want to build an executable suitable for Windows, as well as have access to the `<Windows.h>` headers. You will need to run the binary **as administrator** to be to activate or deactivate packs, as you need to be able to create/copy/delete registry keys. If you do not, you will get a fatal error when trying to activate/deactivate packs.
 
 ***It is recommended to save a backup of each registry key in case of unexpected fault, or else data could be permanently lost***. To backup the registry keys, open *Registry Editor* and find the following two keys:
 ```
